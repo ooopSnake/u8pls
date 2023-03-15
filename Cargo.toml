@@ -1,0 +1,23 @@
+[package]
+name = "u8pls"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.69"
+async-trait = "0.1.66"
+chardetng = "0.1.17"
+encoding_rs = "0.8"
+futures-core = "0.3.27"
+tokio = { version = "1.26.0", features = [
+    "fs",
+    "io-util",
+    "io-std",
+    "macros",
+    "parking_lot",
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "time", ] }
