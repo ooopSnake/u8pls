@@ -10,7 +10,8 @@
 
 ```bash
 > u8pls help
-Usage: u8pls [OPTIONS] <DIR> [MAX_DEPTH] [MAX_CONCURRENCY] <COMMAND>
+
+Usage: u8pls [OPTIONS] <DIR> <COMMAND>
 
 Commands:
   suffix  match file suffix like: ".txt"
@@ -19,14 +20,14 @@ Commands:
   help    Print this message or the help of the given subcommand(s)
 
 Arguments:
-  <DIR>              target dir
-  [MAX_DEPTH]        max sub dir depth
-  [MAX_CONCURRENCY]  max concurrency, increase if you change system `max_open_file` property [default: 32]
+  <DIR>  target dir
 
 Options:
-  -r             recursive on sub dir
-  -h, --help     Print help
-  -V, --version  Print version
+  -r                        recursive on sub dir
+  -d <MAX_DEPTH>            max sub dir depth
+  -j <MAX_CONCURRENCY>      max concurrency, increase if you change system `max_open_file` property [default: 32]
+  -h, --help                Print help
+  -V, --version             Print version
 
 ```
 
