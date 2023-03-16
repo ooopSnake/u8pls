@@ -1,8 +1,8 @@
+use std::fs::FileType;
 use std::future::Future;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyhow::Context;
 use async_trait::async_trait;
 use futures_core::future::BoxFuture;
 
@@ -52,6 +52,7 @@ pub trait Scanner: Sync + Send {
     fn should_recursive(&self, cur_depth: usize) -> bool;
     fn match_file(&self, file_name: &str) -> bool;
     async fn process_file(&self, file_path: &Path) -> anyhow::Result<()>;
+    async fn read_dir(&self, p: &Path) -> anyhow::Result<Vec<(PathBuf, FileType)>>;
 }
 
 #[async_trait]
@@ -65,43 +66,62 @@ impl Scanner for ScannerExec {
     }
 
     async fn process_file(&self, ent_path: &Path) -> anyhow::Result<()> {
-        let _ = self.task_sema.acquire().await?;
+        let _guard = self.task_sema.acquire().await.expect("never fail");
         (self.proxy)(ent_path).await
+    }
+
+    async fn read_dir(&self, p: &Path) -> anyhow::Result<Vec<(PathBuf, FileType)>> {
+        let _guard = self.task_sema.acquire().await.expect("never fail");
+        let pb = p.to_path_buf();
+        tokio::task::spawn_blocking(
+            move || {
+                let p = pb.as_path();
+                let child: Vec<(PathBuf, FileType)> = std::fs::read_dir(p)?
+                    .filter_map(|d| {
+                        if let Ok(v) = d {
+                            if let Ok(ft) = v.file_type() {
+                                return Some((v.path(), ft));
+                            }
+                        }
+                        None
+                    })
+                    .collect();
+                Ok(child)
+            }).await
+            .expect("never fail")
     }
 }
 
 fn scan_impl<T: Scanner + 'static>(
     p: &Path,
-    cfg: Arc<T>,
+    scanner: Arc<T>,
     cur_depth: usize,
 ) -> BoxFuture<'static, anyhow::Result<()>> {
     let p = p.to_path_buf();
     Box::pin(async move {
         let mut child_tasks = tokio::task::JoinSet::new();
-        let mut d = tokio::fs::read_dir(&p)
-            .await
-            .with_context(|| format!("read dir:{:?}", &p))?;
-        while let Some(ent) = d.next_entry().await? {
-            let ent_path_buf = ent.path();
+        let d = scanner.read_dir(&p).await?;
+        for (ent_path_buf, ft) in d {
             let ent_path = ent_path_buf.as_path();
-            let ft = ent
-                .file_type()
-                .await
-                .with_context(|| format!("get file type:{:?}", ent_path))?;
             let file_name = ent_path.file_name()
                 .unwrap_or_default()
                 .to_str().
                 unwrap_or_default();
-            if ft.is_file() && cfg.match_file(file_name) {
-                // submit to parse
-                println!("process file:{:?}", ent_path);
+            if ft.is_file() && scanner.match_file(file_name) {
                 // process
-                cfg.process_file(ent_path)
-                    .await
-                    .with_context(|| format!("process:{:?}", ent_path))?
-            } else if ft.is_dir() && cfg.should_recursive(cur_depth) {
+                {
+                    let scanner = scanner.clone();
+                    let fp = ent_path_buf.clone();
+                    // fuck
+                    child_tasks.spawn(async move {
+                        let ent_path = fp.as_path();
+                        println!("process file:{:?}", ent_path);
+                        scanner.process_file(ent_path).await
+                    });
+                }
+            } else if ft.is_dir() && scanner.should_recursive(cur_depth) {
                 child_tasks.spawn(scan_impl(ent_path,
-                                            cfg.clone(),
+                                            scanner.clone(),
                                             cur_depth + 1));
             }
         }
