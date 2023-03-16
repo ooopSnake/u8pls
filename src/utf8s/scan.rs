@@ -107,7 +107,7 @@ fn scan_impl<T: Scanner + 'static>(
         }
         while let Some(r) = child_tasks.join_next().await {
             if let Err(e) = r.unwrap() {
-                println!("task failed:{}", e)
+                println!("task failed: {:?}", e)
             }
         }
         Ok(())
