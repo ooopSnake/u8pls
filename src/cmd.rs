@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 #[command(version)]
 pub struct ScanArgs {
     /// target dir
@@ -9,15 +9,16 @@ pub struct ScanArgs {
     #[arg(short, default_value_t = true)]
     pub recursive: bool,
     /// max sub dir depth
+    #[arg(short = 'd')]
     pub max_depth: Option<usize>,
     /// max concurrency, increase if you change system `max_open_file` property
-    #[arg(default_value_t = 32)]
+    #[arg(short = 'j', default_value_t = 32)]
     pub max_concurrency: usize,
     #[command(subcommand)]
     pub matcher: Expr,
 }
 
-#[derive(Subcommand, Clone)]
+#[derive(Subcommand, Clone, Debug)]
 pub enum Expr {
     /// match file suffix like: ".txt"
     Suffix {
