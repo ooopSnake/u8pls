@@ -10,6 +10,7 @@ async fn main() -> anyhow::Result<()> {
             args.recursive,
             args.max_depth,
             args.matcher.clone(),
+            args.max_concurrency,
             |ent_path| {
                 async move {
                     let f = file_util::read(ent_path).await?;

@@ -3,10 +3,16 @@ use clap::{Parser, Subcommand};
 #[derive(Parser)]
 #[command(version)]
 pub struct ScanArgs {
+    /// target dir
     pub dir: String,
+    /// recursive on sub dir
     #[arg(short, default_value_t = true)]
     pub recursive: bool,
-    pub max_depth: Option<u32>,
+    /// max sub dir depth
+    pub max_depth: Option<usize>,
+    /// max concurrency, increase if you change system `max_open_file` property
+    #[arg(default_value_t = 32)]
+    pub max_concurrency: usize,
     #[command(subcommand)]
     pub matcher: Expr,
 }

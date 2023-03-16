@@ -21,7 +21,7 @@ impl AsRef<[u8]> for Coding<'_> {
 }
 
 impl<'a> Coding<'a> {
-    pub fn new(source: &[u8]) -> Coding {
+    pub fn new(source: &'a [u8]) -> Coding {
         Coding::Source(source)
     }
 

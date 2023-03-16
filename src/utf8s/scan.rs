@@ -13,8 +13,9 @@ Box<dyn for<'a> Fn(&'a Path) -> BoxFuture<'a, anyhow::Result<()>> + 'static + Se
 
 pub struct ScannerExec {
     recursive: bool,
-    max_depth: Option<u32>,
+    max_depth: Option<usize>,
     matcher: cmd::Expr,
+    task_sema: tokio::sync::Semaphore,
     proxy: ProxyFn,
 }
 
@@ -30,8 +31,9 @@ impl<'a, T> From<T> for AsyncClosure<'a>
 impl ScannerExec {
     pub fn new_with_closure<Closure>(
         recursive: bool,
-        max_depth: Option<u32>,
+        max_depth: Option<usize>,
         matcher: cmd::Expr,
+        max_task: usize,
         proxy: Closure,
     ) -> Self
         where Closure: for<'a> Fn(&'a Path) -> AsyncClosure<'a> + Sync + Send + 'static {
@@ -39,6 +41,7 @@ impl ScannerExec {
             recursive,
             max_depth,
             matcher,
+            task_sema: tokio::sync::Semaphore::new(max_task),
             proxy: Box::new(move |s| proxy(s).0),
         }
     }
@@ -46,14 +49,14 @@ impl ScannerExec {
 
 #[async_trait]
 pub trait Scanner: Sync + Send {
-    fn should_recursive(&self, cur_depth: u32) -> bool;
+    fn should_recursive(&self, cur_depth: usize) -> bool;
     fn match_file(&self, file_name: &str) -> bool;
     async fn process_file(&self, file_path: &Path) -> anyhow::Result<()>;
 }
 
 #[async_trait]
 impl Scanner for ScannerExec {
-    fn should_recursive(&self, cur_depth: u32) -> bool {
+    fn should_recursive(&self, cur_depth: usize) -> bool {
         self.recursive && (self.max_depth.is_none() || self.max_depth <= Some(cur_depth))
     }
 
@@ -62,6 +65,7 @@ impl Scanner for ScannerExec {
     }
 
     async fn process_file(&self, ent_path: &Path) -> anyhow::Result<()> {
+        let _ = self.task_sema.acquire().await?;
         (self.proxy)(ent_path).await
     }
 }
@@ -69,7 +73,7 @@ impl Scanner for ScannerExec {
 fn scan_impl<T: Scanner + 'static>(
     p: &Path,
     cfg: Arc<T>,
-    cur_depth: u32,
+    cur_depth: usize,
 ) -> BoxFuture<'static, anyhow::Result<()>> {
     let p = p.to_path_buf();
     Box::pin(async move {
@@ -94,7 +98,7 @@ fn scan_impl<T: Scanner + 'static>(
                 // process
                 cfg.process_file(ent_path)
                     .await
-                    .with_context(|| format!("process:{:?}", ent_path))?;
+                    .with_context(|| format!("process:{:?}", ent_path))?
             } else if ft.is_dir() && cfg.should_recursive(cur_depth) {
                 child_tasks.spawn(scan_impl(ent_path,
                                             cfg.clone(),
