@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 
-#[derive(Parser, Debug)]
-#[command(author, version, about)]
+#[derive(Parser)]
+#[command(version)]
 pub struct ScanArgs {
     pub dir: String,
     #[arg(short, default_value_t = true)]
@@ -11,15 +11,19 @@ pub struct ScanArgs {
     pub matcher: Expr,
 }
 
-#[derive(Subcommand, Debug, Clone)]
+#[derive(Subcommand, Clone)]
 pub enum Expr {
     Suffix {
+        /// match file suffix like: ".txt"
         suffix: String
     },
     Prefix {
+        /// match file prefix eg:
+        /// "data_" will match: data_1.docx,data_2.bin
         prefix: String
     },
     Regexp {
+        /// regexp
         regexp: String
     },
 }
