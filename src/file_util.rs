@@ -2,11 +2,10 @@ use std::io::SeekFrom;
 use std::path::Path;
 
 use anyhow::Context;
-use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 pub async fn read<T: AsRef<Path>>(file_path: T) -> anyhow::Result<Vec<u8>> {
-    let mut f = File::open(file_path).await.context("guess: open file")?;
+    let mut f = tokio::fs::File::open(file_path).await.context("guess: open file")?;
     let f_len = f.seek(SeekFrom::End(0)).await.context("seek end")?;
     let mut buf: Vec<u8> = vec![0; f_len as usize];
     f.seek(SeekFrom::Start(0)).await.context("seek start")?;
