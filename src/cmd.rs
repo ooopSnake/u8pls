@@ -2,12 +2,13 @@ use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
-pub struct Arg {
-    dir: String,
-    #[arg(short, default_value_t = 1)]
-    recursive: i32,
+pub struct ScanArgs {
+    pub dir: String,
+    #[arg(short, default_value_t = true)]
+    pub recursive: bool,
+    pub max_depth: Option<u32>,
     #[command(subcommand)]
-    expr: Expr,
+    pub expr: Expr,
 }
 
 #[derive(Subcommand, Debug)]
@@ -49,6 +50,6 @@ impl Expr {
     }
 }
 
-pub fn parse() -> Arg {
-    Arg::parse()
+pub fn parse() -> ScanArgs {
+    ScanArgs::parse()
 }

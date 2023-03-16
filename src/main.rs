@@ -1,11 +1,12 @@
+use std::path::Path;
+
 use async_trait::async_trait;
 
 use u8pls::{cmd, file_util, utf8s};
+use u8pls::cmd::ScanArgs;
 
 struct ExampleTraitScanner {
-    recursive: bool,
-    max_depth: Option<u32>,
-    suffix: String,
+    sa: ScanArgs,
 }
 
 #[async_trait]
@@ -18,8 +19,7 @@ impl utf8s::ScanBot for ExampleTraitScanner {
         name.ends_with(&self.suffix)
     }
 
-    async fn process_file(&self, ent_path: &str) -> anyhow::Result<()> {
-        let ent_path = ent_path.to_string();
+    async fn process_file(&self, ent_path: &Path) -> anyhow::Result<()> {
         let f = file_util::read(&ent_path).await?;
         let u8encoded = utf8s::Coding::new(&f).parse().await?;
         file_util::write(&ent_path, u8encoded).await?;
@@ -29,14 +29,12 @@ impl utf8s::ScanBot for ExampleTraitScanner {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    cmd::parse();
+    let scan_args = cmd::parse();
     // use closure
     utf8s::scan(
         ".",
         utf8s::SimpleScanner::new(
-            true,
-            None,
-            ".h".into(),
+            scan_args,
             |ent_path| {
                 async move {
                     let f = file_util::read(ent_path).await?;
@@ -45,17 +43,5 @@ async fn main() -> anyhow::Result<()> {
                     Ok(())
                 }.into()
             }),
-    )
-        .await?;
-
-    // use trait
-    utf8s::scan(
-        ".",
-        ExampleTraitScanner {
-            recursive: true,
-            max_depth: None,
-            suffix: ".c".into(),
-        },
-    )
-        .await
+    ).await
 }
