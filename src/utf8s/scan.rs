@@ -96,7 +96,6 @@ fn scan_impl<T: Scanner + 'static>(
                     .await
                     .with_context(|| format!("process:{:?}", ent_path))?;
             } else if ft.is_dir() && cfg.should_recursive(cur_depth) {
-                println!("enter dir:{:?}", ent_path);
                 child_tasks.spawn_local(scan_impl(ent_path,
                                                   cfg.clone(),
                                                   cur_depth + 1));
