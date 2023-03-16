@@ -10,7 +10,7 @@ anyhow = "1.0.69"
 async-trait = "0.1.66"
 chardetng = "0.1.17"
 clap = { version = "4.1.8", features = ["derive"] }
-encoding_rs = "0.8"
+encoding_rs = "0.8.32"
 futures-core = "0.3.27"
 regex = "1"
 tokio = { version = "1.26.0", features = [
