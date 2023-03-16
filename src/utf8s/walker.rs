@@ -6,18 +6,15 @@ use anyhow::Context;
 use async_trait::async_trait;
 use futures_core::future::BoxFuture;
 
-use crate::cmd::ScanArgs;
-
-#[async_trait]
-pub trait SimpleWalkerProcessDelegate: 'static + Sync + Send {
-    async fn process_file(&self, ent_path: &Path) -> anyhow::Result<()>;
-}
+use crate::cmd;
 
 type ProxyFn =
 Box<dyn for<'a> Fn(&'a Path) -> BoxFuture<'a, anyhow::Result<()>> + 'static + Send + Sync>;
 
-pub struct SimpleScanner {
-    sa: ScanArgs,
+pub struct ScannerExec {
+    recursive: bool,
+    max_depth: Option<u32>,
+    matcher: cmd::Expr,
     proxy: ProxyFn,
 }
 
@@ -30,35 +27,38 @@ impl<'a, T> From<T> for AsyncClosure<'a>
     }
 }
 
-impl SimpleScanner {
-    pub fn new<Closure>(
-        sa: ScanArgs,
+impl ScannerExec {
+    pub fn new_with_closure<Closure>(
+        recursive: bool,
+        max_depth: Option<u32>,
+        matcher: cmd::Expr,
         proxy: Closure,
     ) -> Self
         where Closure: for<'a> Fn(&'a Path) -> AsyncClosure<'a> + Sync + Send + 'static {
         Self {
-            sa,
+            recursive,
+            max_depth,
+            matcher,
             proxy: Box::new(move |s| proxy(s).0),
         }
     }
 }
 
 #[async_trait]
-pub trait ScanBot: Sync + Send {
+pub trait Scanner: Sync + Send {
     fn should_recursive(&self, cur_depth: u32) -> bool;
     fn match_file(&self, file_name: &str) -> bool;
     async fn process_file(&self, file_path: &Path) -> anyhow::Result<()>;
 }
 
 #[async_trait]
-impl ScanBot for SimpleScanner {
+impl Scanner for ScannerExec {
     fn should_recursive(&self, cur_depth: u32) -> bool {
-        let me = &self.sa;
-        me.recursive && (me.max_depth.is_none() || me.max_depth <= Some(cur_depth))
+        self.recursive && (self.max_depth.is_none() || self.max_depth <= Some(cur_depth))
     }
 
     fn match_file(&self, file_name: &str) -> bool {
-        self.sa.expr.can_match(file_name)
+        self.matcher.can_match(file_name)
     }
 
     async fn process_file(&self, ent_path: &Path) -> anyhow::Result<()> {
@@ -66,7 +66,7 @@ impl ScanBot for SimpleScanner {
     }
 }
 
-fn scan_impl<T: ScanBot + 'static>(
+fn scan_impl<T: Scanner + 'static>(
     p: &Path,
     cfg: Arc<T>,
     cur_depth: u32,
@@ -97,9 +97,9 @@ fn scan_impl<T: ScanBot + 'static>(
                     .with_context(|| format!("process:{:?}", ent_path))?;
             } else if ft.is_dir() && cfg.should_recursive(cur_depth) {
                 println!("enter dir:{:?}", ent_path);
-                child_tasks.spawn(scan_impl(ent_path,
-                                            cfg.clone(),
-                                            cur_depth + 1));
+                child_tasks.spawn_local(scan_impl(ent_path,
+                                                  cfg.clone(),
+                                                  cur_depth + 1));
             }
         }
         while let Some(r) = child_tasks.join_next().await {
@@ -111,6 +111,10 @@ fn scan_impl<T: ScanBot + 'static>(
     })
 }
 
-pub async fn scan<P: AsRef<Path>, T: ScanBot + 'static>(path: P, cfg: T) -> anyhow::Result<()> {
-    scan_impl(path.as_ref(), Arc::new(cfg), 0).await
+
+pub async fn scan<P: AsRef<Path>, T: Scanner + 'static>(path: P,
+                                                        cfg: T) -> anyhow::Result<()> {
+    scan_impl(path.as_ref(),
+              Arc::new(cfg),
+              0).await
 }

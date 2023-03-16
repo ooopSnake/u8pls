@@ -8,10 +8,10 @@ pub struct ScanArgs {
     pub recursive: bool,
     pub max_depth: Option<u32>,
     #[command(subcommand)]
-    pub expr: Expr,
+    pub matcher: Expr,
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum Expr {
     Suffix {
         suffix: String
@@ -51,5 +51,7 @@ impl Expr {
 }
 
 pub fn parse() -> ScanArgs {
-    ScanArgs::parse()
+    let out = ScanArgs::parse();
+    out.matcher.can_match(""); // make sure regexp init
+    out
 }
