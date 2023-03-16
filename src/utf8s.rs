@@ -1,6 +1,6 @@
 pub use code::Coding;
-pub use walker::*;
+pub use scan::*;
 
 mod code;
-mod walker;
+mod scan;
 
