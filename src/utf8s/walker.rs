@@ -68,7 +68,7 @@ pub trait ScanBot: Sync + Send {
     async fn process_file(&self, ent_path: &str) -> anyhow::Result<()>;
 }
 
-fn walk_details<T: ScanBot + 'static>(
+fn scan_impl<T: ScanBot + 'static>(
     p: &str,
     cfg: Arc<T>,
     cur_depth: u32,
@@ -95,7 +95,7 @@ fn walk_details<T: ScanBot + 'static>(
                     .with_context(|| format!("process:{}", ent_path))?;
             } else if ft.is_dir() && cfg.should_recursive(cur_depth) {
                 println!("enter dir:{}", ent_path);
-                child_tasks.spawn(walk_details(ent_path, cfg.clone(), cur_depth + 1));
+                child_tasks.spawn(scan_impl(ent_path, cfg.clone(), cur_depth + 1));
             }
         }
         while let Some(r) = child_tasks.join_next().await {
@@ -107,6 +107,6 @@ fn walk_details<T: ScanBot + 'static>(
     })
 }
 
-pub async fn walk<T: ScanBot + 'static>(path: &str, cfg: T) -> anyhow::Result<()> {
-    walk_details(path, Arc::new(cfg), 0).await
+pub async fn scan<T: ScanBot + 'static>(path: &str, cfg: T) -> anyhow::Result<()> {
+    scan_impl(path, Arc::new(cfg), 0).await
 }
