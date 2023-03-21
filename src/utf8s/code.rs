@@ -37,7 +37,10 @@ impl<'a> Coding<'a> {
         let local_ptr = LocalPtrWrap(source.as_ptr(), source.len());
         tokio::task::spawn_blocking(move || {
             let _ = &local_ptr;
-            let src = unsafe { &*std::ptr::slice_from_raw_parts(&*local_ptr.0, local_ptr.1) };
+            let src = unsafe {
+                &*std::ptr::slice_from_raw_parts(
+                    &*local_ptr.0, local_ptr.1)
+            };
             let mut enc_doctor = EncodingDetector::new();
             enc_doctor.feed(src, true);
             let coding = enc_doctor.guess(None, true);
@@ -46,7 +49,8 @@ impl<'a> Coding<'a> {
                 return Coding::Source(src);
             }
             let mut d = coding.new_decoder();
-            let buf_len = d.max_utf8_buffer_length(src.len()).unwrap_or(0);
+            let buf_len = d.max_utf8_buffer_length(
+                src.len()).unwrap_or(0);
             let mut out_s = String::with_capacity(buf_len);
             let _ = d.decode_to_string(src, &mut out_s, true);
             Coding::UTF8 {
