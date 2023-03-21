@@ -8,6 +8,25 @@ use futures_core::future::BoxFuture;
 
 use crate::cmd;
 
+pub trait ProxyHandler: Send + Sync {
+    type Output;
+    type Fut: Future<Output=Self::Output> + Send + 'static;
+
+    fn call(&self, p: &Path) -> Self::Fut;
+}
+
+impl<T, Fut> ProxyHandler for T
+    where
+        T: Fn(PathBuf) -> Fut + Send + Sync + 'static,
+        Fut: Future + Send + 'static {
+    type Output = Fut::Output;
+    type Fut = Fut;
+
+    fn call(&self, p: &Path) -> Self::Fut {
+        (self)(p.to_path_buf())
+    }
+}
+
 type ProxyFn =
 Box<dyn for<'a> Fn(&'a Path) -> BoxFuture<'a, anyhow::Result<()>> + 'static + Send + Sync>;
 
@@ -21,10 +40,14 @@ pub struct ScannerExec {
 
 pub struct AsyncClosure<'a>(BoxFuture<'a, anyhow::Result<()>>);
 
-impl<'a, T> From<T> for AsyncClosure<'a>
-    where T: Future<Output=anyhow::Result<()>> + 'a + Send {
-    fn from(value: T) -> Self {
-        Self(Box::pin(value))
+impl<'a, Fut> From<Fut> for AsyncClosure<'a>
+    where Fut: Future + 'a + Send,
+          Fut::Output: Into<anyhow::Result<()>> {
+    fn from(value: Fut) -> Self {
+        Self(Box::pin(async move {
+            let r: anyhow::Result<()> = value.await.into();
+            r
+        }))
     }
 }
 
@@ -43,6 +66,30 @@ impl ScannerExec {
             matcher,
             task_sema: tokio::sync::Semaphore::new(max_task),
             proxy: Box::new(move |s| proxy(s).0),
+        }
+    }
+
+    pub fn new_with_fn<F>(
+        recursive: bool,
+        max_depth: Option<usize>,
+        matcher: cmd::Expr,
+        max_task: usize,
+        proxy: F,
+    ) -> Self
+        where F: ProxyHandler + Clone + 'static,
+              F::Output: Into<anyhow::Result<()>> {
+        Self {
+            recursive,
+            max_depth,
+            matcher,
+            task_sema: tokio::sync::Semaphore::new(max_task),
+            proxy: Box::new(move |s| {
+                let p = proxy.clone();
+                Box::pin(async move {
+                    let r: anyhow::Result<()> = p.call(s).await.into();
+                    r
+                })
+            }),
         }
     }
 }
