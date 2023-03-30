@@ -139,12 +139,12 @@ impl Scanner for ScannerExec {
     }
 }
 
-fn scan_impl<T: Scanner + 'static>(
-    p: &Path,
+fn scan_impl<P: AsRef<Path>, T: Scanner + 'static>(
+    p: P,
     scanner: Arc<T>,
     cur_depth: usize,
 ) -> BoxFuture<'static, anyhow::Result<()>> {
-    let p = p.to_path_buf();
+    let p = p.as_ref().to_path_buf();
     Box::pin(async move {
         let mut child_tasks = tokio::task::JoinSet::new();
         let d = scanner.read_dir(&p).await?;
@@ -184,7 +184,7 @@ fn scan_impl<T: Scanner + 'static>(
 
 pub async fn scan<P: AsRef<Path>, T: Scanner + 'static>(path: P,
                                                         cfg: T) -> anyhow::Result<()> {
-    scan_impl(path.as_ref(),
+    scan_impl(path,
               Arc::new(cfg),
               0).await
 }
